@@ -7,6 +7,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
+import java.security.Principal;
 
 import java.net.URI;
 import java.util.List;
@@ -23,9 +24,10 @@ class CashCardController {
     }
 
     @GetMapping("/{requestedId}")
-    private ResponseEntity<CashCard> findById(@PathVariable Long requestedId){
+    private ResponseEntity<CashCard> findById(@PathVariable Long requestedId, Principal principal){
 
-        Optional<CashCard> cashCardOptional = cashCardRepository.findById(requestedId);
+        //filtro por id e dono
+        Optional<CashCard> cashCardOptional = Optional.ofNullable(cashCardRepository.findByIdAndOwner(requestedId, principal.getName()));
 
         if (cashCardOptional.isPresent()) {
             return ResponseEntity.ok(cashCardOptional.get());
@@ -36,9 +38,12 @@ class CashCardController {
     }
 
     @PostMapping
-    private ResponseEntity<Void> createCashCard(@RequestBody CashCard newCashCardRequest, UriComponentsBuilder ucb){
+    private ResponseEntity<Void> createCashCard(@RequestBody CashCard newCashCardRequest, UriComponentsBuilder ucb, Principal principal){
 
-        CashCard savedCashCard = cashCardRepository.save(newCashCardRequest);
+        //Cria um cartao que o id sera adicioando pela aplicação, valor passado como parametro e dono tambem passado como parametro
+        CashCard cashCardWithOwner = new CashCard(null, newCashCardRequest.amount(), principal.getName());
+
+        CashCard savedCashCard = cashCardRepository.save(cashCardWithOwner);
 
         URI locationOfNewCashCard = ucb.path("cashcards/{id}").buildAndExpand(savedCashCard.id()).toUri();
 
@@ -46,11 +51,13 @@ class CashCardController {
     }
 
     @GetMapping()
-    private ResponseEntity<List<CashCard>> findAll(Pageable pageable) {
-        Page<CashCard> page = cashCardRepository.findAll(
+    private ResponseEntity<List<CashCard>> findAll(Pageable pageable, Principal principal) {
+        Page<CashCard> page = cashCardRepository.findByOwner(principal.getName(),
                 PageRequest.of(
                         pageable.getPageNumber(),
                         pageable.getPageSize(),
+                        //getSortOr define valores padroes para page, size e sort
+                        //Aqui passamos como parametro que devemos ordenar os dados 'amount' de forma ascendente
                         pageable.getSortOr(Sort.by(Sort.Direction.ASC, "amount"))
                 ));
         return ResponseEntity.ok(page.getContent());
